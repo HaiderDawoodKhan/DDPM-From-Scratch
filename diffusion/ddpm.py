@@ -114,8 +114,36 @@ def ddim_sample(
 
         a_t = extract(buffers.alpha_bars, t, xt.shape)
         sigma = eta * torch.sqrt((1.0 - a_next) / (1.0 - a_t)) * torch.sqrt(1.0 - (a_t / a_next))
-        noise = torch.randn_like(xt)
         direction = torch.sqrt(torch.clamp(1.0 - a_next - sigma**2, min=0.0)) * eps_hat
-        xt = torch.sqrt(a_next) * x0_hat + direction + sigma * noise
+
+        # Deterministic DDIM path when eta=0 (no stochastic noise injection).
+        if eta == 0.0:
+            xt = torch.sqrt(a_next) * x0_hat + direction
+        else:
+            noise = torch.randn_like(xt)
+            xt = torch.sqrt(a_next) * x0_hat + direction + sigma * noise
 
     return xt, snapshots, ts.detach().cpu()
+
+
+@torch.no_grad()
+def ddim_sample_deterministic(
+    model: torch.nn.Module,
+    buffers: DiffusionBuffers,
+    shape: tuple[int, int, int, int],
+    device: torch.device,
+    num_steps: int,
+    capture_steps: list[int] | None = None,
+    seed: int | None = None,
+) -> tuple[torch.Tensor, list[torch.Tensor], torch.Tensor]:
+    """Deterministic DDIM sampler (eta fixed to 0)."""
+    return ddim_sample(
+        model=model,
+        buffers=buffers,
+        shape=shape,
+        device=device,
+        num_steps=num_steps,
+        eta=0.0,
+        capture_steps=capture_steps,
+        seed=seed,
+    )

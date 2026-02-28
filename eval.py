@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import torch
 from torchvision import datasets, transforms, utils
 
-from diffusion.ddpm import ancestral_sample, ddim_sample
+from diffusion.ddpm import ancestral_sample, ddim_sample_deterministic
 from diffusion.schedule import compute_diffusion_buffers, make_beta_schedule
 from models.unet import SmallUNet
 
@@ -239,8 +239,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train-log", type=Path, default=Path("outputs/train_log.csv"))
     parser.add_argument("--train-log-alt", type=Path, default=None)
     parser.add_argument("--train-log-alt-label", type=str, default="alt")
-    parser.add_argument("--sampling-steps-ablation", type=str, default="1000,250,100,50")
-    parser.add_argument("--ddim-eta", type=float, default=0.0)
+    parser.add_argument("--ddim-steps", type=int, default=100)
     parser.add_argument("--data-dir", type=Path, default=Path("data"))
     parser.add_argument("--nn-pairs", type=int, default=16)
     parser.add_argument("--run-nn-check", action="store_true")
@@ -326,55 +325,35 @@ def main() -> None:
         )
         save_image_grid(alt_final, args.out_dir / "schedule_ablation_alt_sample_grid.png", nrow=8)
 
-    # Task 6: sampling-step ablation with reduced reverse steps.
-    ablation_steps = parse_step_list(args.sampling_steps_ablation)
-    metrics_rows: list[tuple[int, float, float]] = []
+    # Task 6: deterministic DDIM sampling (step-reduced, no stochastic noise).
+    ddim_steps = max(2, min(args.ddim_steps, L))
+    ddim_final, _, ddim_ts = ddim_sample_deterministic(
+        model=model,
+        buffers=buffers,
+        shape=(args.samples, 1, 28, 28),
+        device=device,
+        num_steps=ddim_steps,
+        seed=args.seed,
+    )
+    save_image_grid(ddim_final, args.out_dir / f"sample_grid_ddim_deterministic_steps_{ddim_steps}.png", nrow=8)
 
-    for n_steps in ablation_steps:
-        if n_steps >= L:
-            samp, _, _ = ddim_sample(
-                model=model,
-                buffers=buffers,
-                shape=(args.samples, 1, 28, 28),
-                device=device,
-                num_steps=L,
-                eta=args.ddim_eta,
-                seed=args.seed,
-            )
-        else:
-            samp, _, _ = ddim_sample(
-                model=model,
-                buffers=buffers,
-                shape=(args.samples, 1, 28, 28),
-                device=device,
-                num_steps=n_steps,
-                eta=args.ddim_eta,
-                seed=args.seed,
-            )
-
-        save_image_grid(samp, args.out_dir / "ablation_steps" / f"sample_grid_steps_{n_steps}.png", nrow=8)
-        contrast = float(samp.detach().cpu().std().item())
-        diversity = pairwise_diversity(samp)
-        metrics_rows.append((n_steps, contrast, diversity))
-
-    metrics_csv = args.out_dir / "ablation_steps" / "sampling_step_metrics.csv"
-    with metrics_csv.open("w", newline="") as f:
+    ddim_contrast = float(ddim_final.detach().cpu().std().item())
+    ddim_diversity = pairwise_diversity(ddim_final)
+    ddim_metrics_csv = args.out_dir / "ablation_steps" / "ddim_deterministic_metrics.csv"
+    with ddim_metrics_csv.open("w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["num_steps", "pixel_std", "pairwise_l2_diversity"])
-        writer.writerows(metrics_rows)
+        writer.writerow(["ddim_steps", "pixel_std", "pairwise_l2_diversity"])
+        writer.writerow([ddim_steps, ddim_contrast, ddim_diversity])
 
-    narrative = [
-        "Sampling-step ablation failure-mode notes:",
-        "- With fewer steps, denoising has less opportunity to remove structured noise.",
-        "- Typical first failure: fine edges and clothing textures blur or break into blotches.",
-        "- At aggressive skipping, class-consistent silhouettes collapse and artifacts dominate.",
-        "- Check sample grids and metrics: falling diversity/contrast often correlates with degradation.",
-        "",
-        "Measured metrics (num_steps, pixel_std, pairwise_l2_diversity):",
+    ddim_note = [
+        "Deterministic DDIM summary:",
+        f"- steps={ddim_steps}",
+        "- eta=0.0 (deterministic reverse update, no per-step random noise)",
+        f"- pixel_std={ddim_contrast:.6f}",
+        f"- pairwise_l2_diversity={ddim_diversity:.6f}",
+        f"- internal timestep count={len(ddim_ts)}",
     ]
-    for row in metrics_rows:
-        narrative.append(f"- {row[0]}: std={row[1]:.6f}, diversity={row[2]:.6f}")
-    (args.out_dir / "ablation_steps" / "failure_mode_narrative.txt").write_text("\n".join(narrative))
+    (args.out_dir / "ablation_steps" / "ddim_deterministic_notes.txt").write_text("\n".join(ddim_note))
 
     # Task 7: fixed-seed denoising trajectory at i in {L, 3L/4, L/2, L/4, 1}.
     traj_labels = default_trajectory_labels(L)
