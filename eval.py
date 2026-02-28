@@ -235,7 +235,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--samples", type=int, default=64)
     parser.add_argument("--capture-every", type=int, default=100)
     parser.add_argument("--seed", type=int, default=123)
-    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "mps")
     parser.add_argument("--train-log", type=Path, default=Path("outputs/train_log.csv"))
     parser.add_argument("--train-log-alt", type=Path, default=None)
     parser.add_argument("--train-log-alt-label", type=str, default="alt")

@@ -28,7 +28,7 @@ def build_fashionmnist_loader(data_dir: Path, batch_size: int, num_workers: int 
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
-            transforms.Lambda(lambda x: x * 2.0 - 1.0),
+            transforms.Normalize((0.5,), (0.5,)),
         ]
     )
     dataset = datasets.FashionMNIST(root=str(data_dir), train=True, download=True, transform=transform)
@@ -65,7 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data-dir", type=Path, default=Path("data"))
     parser.add_argument("--out-dir", type=Path, default=Path("outputs"))
     parser.add_argument("--batch-size", type=int, default=256)
-    parser.add_argument("--num-workers", type=int, default=4)
+    parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--optimizer", type=str, choices=["adam", "adamw"], default="adam")
@@ -75,9 +75,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--beta-max", type=float, default=2e-2)
     parser.add_argument("--steps", type=int, default=100000)
     parser.add_argument("--sample-every", type=int, default=5000)
-    parser.add_argument("--ckpt-every", type=int, default=5000)
+    parser.add_argument("--ckpt-every", type=int, default=25000)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "mps")
     return parser.parse_args()
 
 

@@ -79,9 +79,9 @@ class Upsample(nn.Module):
 class SmallUNet(nn.Module):
     """Three-level U-Net with skip connections at matching resolutions.
 
-Input: x_t and timestep t
-Output: epsilon_hat with same spatial shape as x_t
-"""
+    Input: x_t and timestep t
+    Output: epsilon_hat with same spatial shape as x_t
+    """
     def __init__(
         self,
         in_channels: int = 1,
